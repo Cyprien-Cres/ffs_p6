@@ -1,6 +1,6 @@
 import { Form } from "react-router";
 import loginImg from "~/assets/img_login.png";
-import { Logo } from "~/components/logo";
+import { Logo } from "../../components/logo/logo";
 
 type LoginProps = {
     actionData?: {
@@ -8,10 +8,9 @@ type LoginProps = {
         token?: string;
         id?: string;
     };
-    isSubmitting: boolean;
 };
 
-export function Login({ actionData, isSubmitting }: LoginProps) {
+export function Login({ actionData }: LoginProps) {
     return (
         <main className="home">
             <section className="login-left">
@@ -41,7 +40,7 @@ export function Login({ actionData, isSubmitting }: LoginProps) {
                             required
                         />
 
-                        <button type="submit" disabled={isSubmitting}>
+                        <button type="submit">
                             Se connecter
                         </button>
                     </Form>

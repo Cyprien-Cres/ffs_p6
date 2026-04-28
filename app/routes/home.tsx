@@ -1,5 +1,5 @@
 import type { Route } from "./+types/home";
-import {redirect, useActionData, useNavigation} from "react-router";
+import {redirect, useActionData} from "react-router";
 import { Login } from "~/page/login/login";
 import {commitSession, getSession} from "~/utils/session.server";
 
@@ -62,8 +62,6 @@ export async function action({ request }: Route.ActionArgs): Promise<LoginAction
 
 export default function Home() {
   const actionData = useActionData<typeof action>();
-  const navigation = useNavigation();
-  const isSubmitting = navigation.state === "submitting";
 
-  return <Login actionData={actionData} isSubmitting={isSubmitting} />;
+  return <Login actionData={actionData} />;
 }
