@@ -1,17 +1,20 @@
 import { NavLink, useSubmit } from "react-router";
 import { Logo } from "../logo/logo";
+import sportsee from "~/assets/img/SPORTSEE.svg";
 
 export function Header() {
     const submit = useSubmit();
 
     const handleLogout = () => {
-        // Envoie une requête POST à la route /logout de manière programmatique
         submit(null, { method: "post", action: "/logout" });
     };
 
     return (
         <header>
-            <Logo />
+            <div className="header-logo">
+                <Logo />
+                <img className="sportsee" src={sportsee} alt="SportSee" />
+            </div>
             <nav>
                 <li className="dashboard">
                     <NavLink

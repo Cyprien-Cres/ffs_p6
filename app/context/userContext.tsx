@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type UserInfo = {
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+
+type UserProfile = {
     firstName: string;
     lastName: string;
     age: number;
-    gender: "female" | "male" | string;
     profilePicture: string;
     height: number;
     weight: number;
@@ -18,7 +19,7 @@ type Statistics = {
 };
 
 type UserApiResponse = {
-    userInfos: UserInfo;
+    profile: UserProfile;
     statistics: Statistics;
 };
 
@@ -28,7 +29,7 @@ type HeartRate = {
     average: number;
 };
 
-type RunningData = {
+export type RunningSession = {
     date: string;
     distance: number;
     duration: number;
@@ -36,32 +37,33 @@ type RunningData = {
     caloriesBurned: number;
 };
 
-type UserActivityApiResponse = {
-    runningData: RunningData[];
-};
-
 type UserContextValue = {
     data: UserApiResponse | null;
-    activityData: UserActivityApiResponse | null;
     loading: boolean;
     error: string | null;
     refetch: () => Promise<void>;
-    refetchActivity: (startDate: string, endDate: string) => Promise<void>;
+    fetchActivity: (startWeek: string, endWeek: string) => Promise<RunningSession[]>;
 };
 
 const UserContext = createContext<UserContextValue | undefined>(undefined);
 
-const USER_INFO_URL =
-    "https://2c26f4f1-d38c-41cc-9a75-8ec8df2d0e0c.mock.pstmn.io/api/user-info";
+const USER_INFO_URL = `${API_BASE_URL}/api/user-info`;
+const USER_ACTIVITY_URL = `${API_BASE_URL}/api/user-activity`;
 
-const USER_ACTIVITY_URL =
-    "https://2c26f4f1-d38c-41cc-9a75-8ec8df2d0e0c.mock.pstmn.io/api/user-activity";
+type UserProviderProps = {
+    children: React.ReactNode;
+    token: string;
+};
 
-export function UserProvider({ children }: { children: React.ReactNode }) {
+export function UserProvider({ children, token }: UserProviderProps) {
     const [data, setData] = useState<UserApiResponse | null>(null);
-    const [activityData, setActivityData] = useState<UserActivityApiResponse | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+
+    const authHeaders = (): HeadersInit => ({
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+    });
 
     const fetchUserInfo = async () => {
         setLoading(true);
@@ -70,7 +72,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         try {
             const response = await fetch(USER_INFO_URL, {
                 method: "GET",
-                headers: { "Content-Type": "application/json" },
+                headers: authHeaders(),
             });
 
             if (!response.ok) {
@@ -86,48 +88,37 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const fetchUserActivity = async (startDate: string, endDate: string) => {
-        setLoading(true);
-        setError(null);
+    const fetchActivity = async (startWeek: string, endWeek: string): Promise<RunningSession[]> => {
+        const url = new URL(USER_ACTIVITY_URL);
+        url.searchParams.set("startWeek", startWeek);
+        url.searchParams.set("endWeek", endWeek);
 
-        try {
-            const url = new URL(USER_ACTIVITY_URL);
-            url.searchParams.set("startDate", startDate);
-            url.searchParams.set("endDate", endDate);
+        const response = await fetch(url.toString(), {
+            method: "GET",
+            headers: authHeaders(),
+        });
 
-            const response = await fetch(url.toString(), {
-                method: "GET",
-                headers: { "Content-Type": "application/json" },
-            });
-
-            if (!response.ok) {
-                throw new Error(`Erreur API (${response.status})`);
-            }
-
-            const json = (await response.json()) as UserActivityApiResponse;
-            setActivityData(json);
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Erreur inconnue");
-        } finally {
-            setLoading(false);
+        if (!response.ok) {
+            throw new Error(`Erreur API (${response.status})`);
         }
+
+        return (await response.json()) as RunningSession[];
     };
 
     useEffect(() => {
         void fetchUserInfo();
-        void fetchUserActivity("2025-01-01", "2025-12-31");
-    }, []);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [token]);
 
     const value = useMemo(
         () => ({
             data,
-            activityData,
             loading,
             error,
             refetch: fetchUserInfo,
-            refetchActivity: fetchUserActivity,
+            fetchActivity,
         }),
-        [data, activityData, loading, error]
+        [data, loading, error]
     );
 
     return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

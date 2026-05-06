@@ -15,10 +15,9 @@ const sessionStorage = createCookieSessionStorage<SessionData, SessionFlashData>
         httpOnly: true,
         path: "/",
         sameSite: "lax",
-        // En prod: mets une vraie secret via variable d'env
-        secrets: [process.env.SESSION_SECRET ?? "dev-secret-a-changer"],
+        secrets: [process.env.SESSION_SECRET ?? ""],
         secure: process.env.NODE_ENV === "production",
-        maxAge: 60 * 60 * 24, // 24h
+        maxAge: 60 * 60 * 24,
     },
 });
 

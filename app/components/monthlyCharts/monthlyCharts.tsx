@@ -1,30 +1,23 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { useUser } from '~/context/userContext';
+import { useUser, type RunningSession } from '~/context/userContext';
+import { parseLocalDate, getMondayOfWeek, toLocalDateKey } from '~/utils/dates';
 
-// Composant pour personnaliser l'affichage de l'info-bulle (Tooltip) au survol
 const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
-
         const formatDate = (dateStr: string | null) => {
             if (!dateStr) return '';
-            const date = new Date(dateStr);
-            return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+            return new Date(dateStr).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
         };
-
         const start = formatDate(data.startDate);
         const end = formatDate(data.endDate);
         const dateDisplay = start && end ? `${start} au ${end}` : 'Aucune date';
 
         return (
             <div className="custom-tooltip-container">
-                <p className="custom-tooltip-date">
-                    {dateDisplay}
-                </p>
-                <p className="custom-tooltip-distance">
-                    {data.distance} km
-                </p>
+                <p className="custom-tooltip-date">{dateDisplay}</p>
+                <p className="custom-tooltip-distance">{data.distance} km</p>
             </div>
         );
     }
@@ -32,107 +25,101 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export function MonthlyCharts() {
-    const { activityData } = useUser();
+    const { fetchActivity, data: userData } = useUser();
 
-    // Nouvel état pour gérer le recul dans le temps par tranches de 4 semaines (28 jours)
     const [periodOffset, setPeriodOffset] = useState(0);
+    const [sessions, setSessions] = useState<RunningSession[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    // 1. Préparation dynamique des données
-    const { chartData, periodEndDate, hasMoreOlderData } = useMemo(() => {
-        if (!activityData?.runningData || activityData.runningData.length === 0) {
-            return { chartData: [], periodEndDate: null, hasMoreOlderData: false };
-        }
+    const { startDate, endDate } = useMemo(() => {
+        const today = new Date();
+        const currentMonday = getMondayOfWeek(today);
 
-        const sortedData = [...activityData.runningData].sort(
-            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
+        const lastDisplayedMonday = new Date(currentMonday);
+        lastDisplayedMonday.setDate(lastDisplayedMonday.getDate() - 7);
 
-        const absoluteLatestDate = new Date(sortedData[sortedData.length - 1].date);
-        absoluteLatestDate.setHours(23, 59, 59, 999);
+        lastDisplayedMonday.setDate(lastDisplayedMonday.getDate() - periodOffset * 28);
 
-        const targetEndDate = new Date(absoluteLatestDate);
-        targetEndDate.setDate(targetEndDate.getDate() - (periodOffset * 28));
+        const firstDisplayedMonday = new Date(lastDisplayedMonday);
+        firstDisplayedMonday.setDate(firstDisplayedMonday.getDate() - 21);
 
-        const targetStartDate = new Date(targetEndDate);
-        targetStartDate.setDate(targetStartDate.getDate() - 27);
-        targetStartDate.setHours(0, 0, 0, 0);
+        const end = new Date(lastDisplayedMonday);
+        end.setDate(end.getDate() + 6);
 
-        const getWeekBoundaries = (weekOffset: number) => {
-            const end = new Date(targetEndDate);
-            end.setDate(end.getDate() - (weekOffset * 7));
-            const start = new Date(end);
-            start.setDate(start.getDate() - 6); // 7 jours en incluant la fin
-            return {
-                startDate: start.toISOString(),
-                endDate: end.toISOString()
-            };
+        return { startDate: firstDisplayedMonday, endDate: end };
+    }, [periodOffset]);
+
+    const hasMoreOlderData = useMemo(() => {
+        if (!userData?.profile.createdAt) return true;
+        const createdAt = parseLocalDate(userData.profile.createdAt);
+        return startDate > createdAt;
+    }, [startDate, userData]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        setError(null);
+
+        fetchActivity(toLocalDateKey(startDate), toLocalDateKey(endDate))
+            .then((data) => {
+                if (!cancelled) setSessions(data);
+            })
+            .catch((e) => {
+                if (!cancelled) setError(e instanceof Error ? e.message : 'Erreur inconnue');
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
         };
+    }, [startDate, endDate, fetchActivity]);
 
-        const weeks = [
-            { name: 'S1', distance: 0, ...getWeekBoundaries(3) },
-            { name: 'S2', distance: 0, ...getWeekBoundaries(2) },
-            { name: 'S3', distance: 0, ...getWeekBoundaries(1) },
-            { name: 'S4', distance: 0, ...getWeekBoundaries(0) },
-        ];
-
-        const oldestDataDate = new Date(sortedData[0].date);
-        const canGoBackFurther = oldestDataDate < targetStartDate;
-
-        sortedData.forEach((day) => {
-            const dayDate = new Date(day.date);
-            const diffTime = targetEndDate.getTime() - dayDate.getTime();
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-            if (diffDays >= 0 && diffDays < 28) {
-                const weekIndex = 3 - Math.floor(diffDays / 7);
-
-                weeks[weekIndex].distance += day.distance;
-            }
+    const chartData = useMemo(() => {
+        const weeks = Array.from({ length: 4 }, (_, i) => {
+            const monday = new Date(startDate);
+            monday.setDate(startDate.getDate() + i * 7);
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+            return {
+                name: `S${i + 1}`,
+                distance: 0,
+                startDate: monday.toISOString(),
+                endDate: sunday.toISOString(),
+                mondayKey: toLocalDateKey(monday),
+            };
         });
 
-        const formattedChartData = weeks.map((week) => ({
-            ...week,
-            distance: Math.round(week.distance)
-        }));
+        sessions.forEach((s) => {
+            const sessionDate = parseLocalDate(s.date);
+            const sessionMonday = getMondayOfWeek(sessionDate);
+            const sessionMondayKey = toLocalDateKey(sessionMonday);
+            const week = weeks.find((w) => w.mondayKey === sessionMondayKey);
+            if (week) week.distance += s.distance;
+        });
 
-        return {
-            chartData: formattedChartData,
-            periodEndDate: targetEndDate,
-            hasMoreOlderData: canGoBackFurther
-        };
-    }, [activityData, periodOffset]);
+        return weeks.map((w) => ({ ...w, distance: Math.round(w.distance) }));
+    }, [sessions, startDate]);
 
     const averageDistance = useMemo(() => {
-        if (!chartData || chartData.length === 0) return 0;
-        const totalDistance = chartData.reduce((acc, week) => acc + week.distance, 0);
-        return Math.round(totalDistance / 4);
+        if (chartData.length === 0) return 0;
+        const total = chartData.reduce((acc, w) => acc + w.distance, 0);
+        return Math.round(total / 4);
     }, [chartData]);
 
     const dateIntervalDisplay = useMemo(() => {
-        if (!periodEndDate) return "Aucune donnée";
+        const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+        return `${startDate.toLocaleDateString('fr-FR', opts)} - ${endDate.toLocaleDateString('fr-FR', opts)}`;
+    }, [startDate, endDate]);
 
-        const startDate = new Date(periodEndDate);
-        startDate.setDate(startDate.getDate() - 27);
-
-        const formatOptions: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
-
-        const startStr = startDate.toLocaleDateString('fr-FR', formatOptions);
-        const endStr = periodEndDate.toLocaleDateString('fr-FR', formatOptions);
-
-        return `${startStr} - ${endStr}`;
-    }, [periodEndDate]);
-
-    // Fonctions au clic sur les flèches
     const handlePrevious = () => {
-        if (hasMoreOlderData) {
-            setPeriodOffset(prev => prev + 1);
-        }
+        if (hasMoreOlderData) setPeriodOffset((p) => p + 1);
     };
 
     const handleNext = () => {
-        if (periodOffset > 0) {
-            setPeriodOffset(prev => prev - 1);
-        }
+        if (periodOffset > 0) setPeriodOffset((p) => p - 1);
     };
 
     return (
@@ -145,15 +132,17 @@ export function MonthlyCharts() {
                             <button
                                 className="monthly-charts-nav-btn"
                                 onClick={handlePrevious}
-                                disabled={!hasMoreOlderData}
+                                disabled={!hasMoreOlderData || loading}
                             >
                                 &lt;
                             </button>
-                            <span className="monthly-charts-date-range">{dateIntervalDisplay}</span>
+                            <span className="monthly-charts-date-range">
+                                {loading ? 'Chargement...' : error ? 'Erreur' : dateIntervalDisplay}
+                            </span>
                             <button
                                 className="monthly-charts-nav-btn"
                                 onClick={handleNext}
-                                disabled={periodOffset === 0}
+                                disabled={periodOffset === 0 || loading}
                             >
                                 &gt;
                             </button>
@@ -165,23 +154,19 @@ export function MonthlyCharts() {
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData} margin={{ top: 0, right: 0, left: 15, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EBEBEB" />
-
                             <XAxis
                                 dataKey="name"
                                 axisLine={{ stroke: '#8c8c8c' }}
                                 tickLine={false}
                                 tick={{ fill: '#7b7b7b', fontSize: 12, dy: 15 }}
                             />
-
                             <YAxis
                                 axisLine={{ stroke: '#8c8c8c' }}
                                 tickLine={false}
                                 tick={{ fill: '#7b7b7b', fontSize: 12, dx: -10 }}
                                 ticks={[0, 10, 20, 30]}
                             />
-
                             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0)' }} />
-
                             <Legend
                                 iconType="circle"
                                 iconSize={8}
@@ -189,16 +174,12 @@ export function MonthlyCharts() {
                                 formatter={(value) => (
                                     <span
                                         className="monthly-charts-legend-text"
-                                        style={{
-                                            color: '#707070', /* 👈 Mets ICI la couleur que tu veux pour le TEXTE ("Km") */
-                                            fontSize: '12px'
-                                        }}
+                                        style={{ color: '#707070', fontSize: '12px' }}
                                     >
                                         {value}
                                     </span>
                                 )}
                             />
-
                             <Bar
                                 dataKey="distance"
                                 name="Km"
