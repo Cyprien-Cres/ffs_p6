@@ -1,6 +1,6 @@
 import type { Route } from "./+types/dashboard";
 import { Dashboard as DashboardPage } from "~/page/dashboard/dashboard";
-import {requireUserToken} from "~/utils/session.server";
+import {requireUserToken} from "../utils/session.server";
 
 export async function loader({ request }: Route.LoaderArgs) {
     await requireUserToken(request);

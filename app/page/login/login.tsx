@@ -1,6 +1,7 @@
 import { Form } from "react-router";
-import loginImg from "~/assets/img_login.png";
-import { Logo } from "../../components/logo/logo";
+import loginImg from "~/assets/img/img_login.png";
+import { Logo } from "~/components/logo/logo";
+import sportsee from "~/assets/img/SPORTSEE.svg";
 
 type LoginProps = {
     actionData?: {
@@ -14,7 +15,10 @@ export function Login({ actionData }: LoginProps) {
     return (
         <main className="home">
             <section className="login-left">
-                <Logo />
+                <div className="header-logo">
+                    <Logo />
+                    <img className="sportsee" src={sportsee} alt="SportSee" />
+                </div>
                 <div className="login-left-form">
                     <h1>
                         Transformez <br /> vos stats en resultats
@@ -28,7 +32,6 @@ export function Login({ actionData }: LoginProps) {
                             name="username"
                             type="text"
                             autoComplete="username"
-                            required
                         />
 
                         <label htmlFor="password">Mot de passe</label>
@@ -37,7 +40,6 @@ export function Login({ actionData }: LoginProps) {
                             name="password"
                             type="password"
                             autoComplete="current-password"
-                            required
                         />
 
                         <button type="submit">
@@ -45,7 +47,7 @@ export function Login({ actionData }: LoginProps) {
                         </button>
                     </Form>
 
-                    {actionData?.error ? <p>{actionData.error}</p> : null}
+                    {actionData?.error ? <p className="login-error">{actionData.error}</p> : null}
 
                     <a href="">
                         <p>Mot de passe oublie ?</p>

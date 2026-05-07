@@ -1,12 +1,10 @@
 import type { Route } from "./+types/home";
-import {redirect, useActionData} from "react-router";
+import { redirect, useActionData } from "react-router";
 import { Login } from "~/page/login/login";
-import {commitSession, getSession} from "~/utils/session.server";
+import { commitSession, getSession } from "~/utils/session.server";
 
 type LoginActionData = {
   error?: string;
-  token?: string;
-  id?: string;
 };
 
 export function meta({}: Route.MetaArgs) {
@@ -21,47 +19,55 @@ export async function action({ request }: Route.ActionArgs): Promise<LoginAction
   const username = String(formData.get("username") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  if (!username || !password) {
-    return { error: "Username et mot de passe requis." };
+  if (!username) {
+    return { error: "Nom d'utilisateur requis." };
   }
 
+  if (!password) {
+    return { error: "Mot de passe requis." };
+  }
+
+  const apiUrl = process.env.API_URL ?? "http://localhost:8000";
+
   try {
-    const response = await fetch(
-        "https://2c26f4f1-d38c-41cc-9a75-8ec8df2d0e0c.mock.pstmn.io/api/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
-        }
-    );
+    const response = await fetch(`${apiUrl}/api/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        return { error: "Identifiants invalides." };
+      }
       return { error: `Echec de connexion (${response.status}).` };
     }
 
-    const data = (await response.json()) as { token?: string; id?: string };
+    const data = (await response.json()) as {
+      token?: string;
+      userId?: string | number;
+    };
 
-    if (!data.token || !data.id) {
-      return { error: "Reponse API invalide (token/id manquant)." };
+    if (!data.token || data.userId === undefined || data.userId === null) {
+      return { error: "Reponse API invalide (token/userId manquant)." };
     }
 
     const session = await getSession(request.headers.get("Cookie"));
     session.set("token", data.token);
-    session.set("userId", data.id);
+    session.set("userId", String(data.userId));
 
     return redirect("/dashboard", {
       headers: {
         "Set-Cookie": await commitSession(session),
       },
     });
-
-  } catch {
+  } catch (err) {
+    console.error("[login action] fetch error:", err);
     return { error: "Impossible de joindre le serveur de connexion." };
   }
 }
 
 export default function Home() {
   const actionData = useActionData<typeof action>();
-
   return <Login actionData={actionData} />;
 }

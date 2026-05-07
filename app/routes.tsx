@@ -5,4 +5,5 @@ export default [
     route("dashboard", "routes/dashboard.tsx"),
     route("profil", "routes/profil.tsx"),
     route("logout", "routes/logout.tsx"),
+    route("*", "routes/notfound.tsx"),
 ] satisfies RouteConfig;
