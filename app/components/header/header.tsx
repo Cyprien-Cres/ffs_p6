@@ -1,0 +1,48 @@
+import { NavLink, useSubmit } from "react-router";
+import { Logo } from "../logo/logo";
+import sportsee from "~/assets/img/SPORTSEE.svg";
+
+export function Header() {
+    const submit = useSubmit();
+
+    const handleLogout = () => {
+        submit(null, { method: "post", action: "/logout" });
+    };
+
+    return (
+        <header>
+            <div className="header-logo">
+                <Logo />
+                <img className="sportsee" src={sportsee} alt="SportSee" />
+            </div>
+            <nav>
+                <li className="dashboard">
+                    <NavLink
+                        to="/dashboard"
+                        className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+                    >
+                        Dashboard
+                    </NavLink>
+                </li>
+
+                <li className="profil">
+                    <NavLink
+                        to="/profil"
+                        className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+                    >
+                        Mon profil
+                    </NavLink>
+                </li>
+
+                <p>|</p>
+                <li
+                    className="logout"
+                    onClick={handleLogout}
+                    style={{ cursor: "pointer" }}
+                >
+                    Se déconnecter
+                </li>
+            </nav>
+        </header>
+    );
+}
